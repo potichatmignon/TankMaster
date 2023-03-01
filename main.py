@@ -1,8 +1,13 @@
-from classes_tests import *
+from tank import *
+from bonus import *
 from fonctions import *
-import time
+
 
 pg.init()
+
+frq = 60
+clock = pg.time.Clock()
+time = 0
 
 partie = True
 fen = pg.display.set_mode((0, 0), pg.FULLSCREEN)
@@ -17,26 +22,15 @@ joueurs = [tank1, tank2]
 joueurs[1].angle = 136
 
 bonus = []
-tb = time.time()  # temps à l'apparition du dernier bonus
-cd = uniform(1, 3) # temps avant l'apparition du premier bonus
+cd = 0 # temps avant l'apparition du prochain
+tb = 0  # temps à l'apparition du dernier bonus
 
-frequency = 60
-F = True
-ti = time.time()
 font = pg.font.SysFont('arial', 24)
 
 while partie:
-    if F:
-        ti = time.time()
-        dt = 1/frequency
-        F = False
-    else:
-        dt = time.time() - ti
-        if dt >= 1/frequency:
-            F = True
-            fen.blit(fond, [0, 0])
-            text = font.render(str(1 / dt), True, (0, 255, 0))
-            fen.blit(text, (500,10))
+
+    clock.tick(frq)
+    fen.blit(fond, (0, 0))
 
     for event in pg.event.get():
         if event.type == pg.QUIT:
@@ -66,15 +60,14 @@ while partie:
                 if not joueurs[0].freeze:
                     for b in joueurs[0].balle:
                         if not b.tir:
-                            b.t0 = time.time()
-                            b.pos0 = joueurs[0].posx
+                            b.t0 = time
                             b.tir = True
                             break
             if event.key == pg.K_RETURN:
                 if not joueurs[1].freeze:
                     for b in joueurs[1].balle:
                         if not b.tir:
-                            b.t0 = time.time()
+                            b.t0 = time
                             b.pos0 = joueurs[1].posx
                             b.tir = True
                             break
@@ -98,10 +91,10 @@ while partie:
 
     # Ajout de bonus à intervalle aléatoire
 
-    if time.time() - tb >= cd:
+    if time - tb >= cd and len(bonus) <= 5:
         bonus.append(Bonus(fenx))
-        cd = uniform(1, 3)
-        tb = time.time()
+        cd = uniform(7 * frq, 14 * frq)
+        tb = time
 
     for indice in range(2):
         t = joueurs[indice]
@@ -109,7 +102,7 @@ while partie:
         adv = joueurs[indiceOp]
         tir = True
 
-        t.shield = time.time() - t.t_shield <= 5
+        t.shield = time - t.t_shield <= 5 * frq
 
         for b in t.balle:
             if not b.tir:
@@ -121,12 +114,13 @@ while partie:
                 # On met à jour la position de la balle et son angle de tir si elle n'est pas tirée
 
                 b.posx = t.posx + ((60 * fenx / 1080) * ((indice + 1) % 2))
+                b.pos0 = b.posx
                 b.posy = t.posy + (20 * feny / 675)
                 b.angle = t.angle
 
                 # On affiche la balle
 
-                if F and not t.freeze:
+                if not t.freeze:
                     if t.plus:
                         t.angle_plus()
                     if t.moins:
@@ -139,12 +133,12 @@ while partie:
 
                 # On met à jour sa position en fonction de la trajectoire de tir
 
-                b.shoot(time.time() - b.t0)
+                b.shoot(time)
                 b.hitbox = (b.posx, b.posy, b.size, b.size)
 
                 # On affiche la balle
-                if F:
-                    fen.blit(b.image, (b.posx, b.posy))
+
+                fen.blit(b.image, (b.posx, b.posy))
 
             # On vérifie si la balle touche l'adversaire s'il n'est pas invincible
 
@@ -167,7 +161,7 @@ while partie:
                     match bon.type:
                         case 0:
                             adv.freeze = True
-                            adv.freezeT = time.time()
+                            adv.freezeT = time
                         case 1:
                             t.balle.append(balle(t.propx, t.propy))
                         case 2:
@@ -176,34 +170,33 @@ while partie:
                             for bll in t.balle:
                                 bll.mult += 0.25
                         case 4:
-                            t.t_shield = time.time()
+                            t.t_shield = time
 
                     # On supprime le bonus touché
 
                     bonus = bonus[:i] + bonus[i + 1:]
                 i += 1
 
-        if time.time() - t.freezeT > 3 or t.shield:
+        if time - t.freezeT > 3 * 60 or t.shield:
             t.freeze = False
 
-        if F:
-            if not t.freeze:
-                if not tir:
-                    if t.g :
-                        t.gauche()
-                    if t.d :
-                        t.droite()
-                    t.hitbox = (t.posx, t.posy, t.size, t.size)
-                if not t.shield:
-                    fen.blit(t.image, [t.posx, t.posy])
-                else:
-                    fen.blit(t.shield_img, [t.posx, t.posy])
+        if not t.freeze:
+            if not tir:
+                if t.g :
+                    t.gauche()
+                if t.d :
+                    t.droite()
+                t.hitbox = (t.posx, t.posy, t.size, t.size)
+            if not t.shield:
+                fen.blit(t.image, [t.posx, t.posy])
             else:
-                fen.blit(t.freeze_img, [t.posx, t.posy])
+                fen.blit(t.shield_img, [t.posx, t.posy])
+        else:
+            fen.blit(t.freeze_img, [t.posx, t.posy])
 
-            t.affiche_vie(fen)
+        t.affiche_vie(fen)
 
-    if F:
-        for bon in bonus:
-            fen.blit(bon.image, [bon.x, bon.y])
-        pg.display.update()
+    for bon in bonus:
+        fen.blit(bon.image, [bon.x, bon.y])
+    pg.display.update()
+    time += 1
